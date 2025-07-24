@@ -4,6 +4,9 @@ import re
 import smtplib
 from email.message import EmailMessage
 from playwright.async_api import async_playwright, TimeoutError
+import threading
+import time
+from flask import Flask, jsonify
 
 # --- Configuration (using environment variables) ---
 WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://www.gamersberg.com/grow-a-garden/stock")
@@ -23,7 +26,10 @@ GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")       # Your Gmail App
 GMAIL_RECIPIENT_EMAIL = os.environ.get("GMAIL_RECIPIENT_EMAIL") # The email address to send alerts to
 
 ENABLE_GMAIL_EMAIL = os.environ.get("ENABLE_GMAIL_EMAIL", "False").lower() == "true"
-# CHECK_INTERVAL_SECONDS is no longer needed as the Render Cron Job handles the scheduling.
+CHECK_INTERVAL_SECONDS = int(os.environ.get("CHECK_INTERVAL_SECONDS", "120")) # Default to 2 minutes
+
+# Global variable to keep track of notified seeds across checks
+notified_seeds = set()
 
 def send_email_notification(subject, body):
     """Sends an email notification using Gmail SMTP."""
@@ -53,28 +59,24 @@ def send_email_notification(subject, body):
         print("You can generate one here: https://myaccount.google.com/apppasswords")
 
 
-async def check_stock():
-    """Checks the website for target seed stock and sends alerts."""
+async def check_stock_async():
+    """Asynchronously checks the website for target seed stock and sends alerts."""
     print(f"Starting stock check for {WEBSITE_URL}...")
     print(f"Target seeds: {', '.join(TARGET_SEEDS)}")
 
     async with async_playwright() as p:
         browser = None
         try:
-            # Run in headless mode for deployment
-            browser = await p.chromium.launch(headless=True) 
+            browser = await p.chromium.launch(headless=True) # Run in headless mode for deployment
             page = await browser.new_page()
             await page.goto(WEBSITE_URL, wait_until="domcontentloaded")
 
-            # Wait for the seed items to be present
-            # Increased timeout for initial load
-            await page.wait_for_selector(".seed-item", timeout=15000) 
+            await page.wait_for_selector(".seed-item", timeout=15000) # Increased timeout for initial load
 
             seed_items = await page.locator(".seed-item").all()
-            found_available_seeds = False
-            alert_email_subject = "Gamersberg Stock Alert!"
-            alert_email_body = "The following target seeds are now available:\n\n"
-
+            
+            newly_available_seeds = []
+            
             for item_element in seed_items:
                 seed_name_element = item_element.locator("h2")
                 stock_element = item_element.locator("p.text-green-500, p.text-red-500")
@@ -82,36 +84,68 @@ async def check_stock():
                 seed_name = await seed_name_element.text_content()
                 stock_text = await stock_element.text_content()
 
-                # Clean up seed name to match target list (e.g., remove " Seed")
                 cleaned_seed_name = seed_name.replace(" Seed", "").strip()
 
-                # Extract quantity using regex
                 match = re.search(r'Stock:\s*(\d+)', stock_text)
                 quantity = int(match.group(1)) if match else 0
 
                 if cleaned_seed_name in TARGET_SEEDS:
                     print(f"Found {cleaned_seed_name}: Stock: {quantity}")
-                    if quantity > 0:
-                        alert_email_body += f"- {cleaned_seed_name}: {quantity} available!\n"
-                        found_available_seeds = True
+                    if quantity > 0 and cleaned_seed_name not in notified_seeds:
+                        newly_available_seeds.append(f"{cleaned_seed_name}: {quantity} available!")
+                        notified_seeds.add(cleaned_seed_name) # Add to set to prevent repeat notifications
 
-            if found_available_seeds:
+            if newly_available_seeds:
+                alert_email_subject = "Gamersberg Stock Alert! NEWLY AVAILABLE!"
+                alert_email_body = "The following target seeds are now available:\n\n" + "\n".join(newly_available_seeds)
                 print("Sending availability alert via email...")
                 send_email_notification(alert_email_subject, alert_email_body.strip())
             else:
-                print("No target seeds found available in stock.")
+                print("No *newly* available target seeds found in stock.")
 
         except TimeoutError:
             print(f"Error: Page elements did not load within the expected time for {WEBSITE_URL}")
         except Exception as e:
-            print(f"An unexpected error occurred: {e}")
+            print(f"An unexpected error occurred during stock check: {e}")
         finally:
             if browser:
                 await browser.close()
     print("Stock check completed.")
 
-# The script will now run check_stock() once and then exit.
-# Render's Cron Job will handle the repeated execution.
+
+def run_bot_in_background():
+    """Runs the stock check indefinitely in an asyncio event loop."""
+    print("Starting background stock checker loop...")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    while True:
+        loop.run_until_complete(check_stock_async())
+        print(f"Waiting for {CHECK_INTERVAL_SECONDS} seconds before next check...")
+        time.sleep(CHECK_INTERVAL_SECONDS) # Use time.sleep as it's not blocking the Flask server
+
+# --- Flask Web Server ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    """A simple endpoint for Render to ping."""
+    return jsonify({"status": "ok", "message": "Gamersberg Stock Bot is running!"})
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint."""
+    return jsonify({"status": "healthy"})
+
 if __name__ == "__main__":
-    print("Starting bot...")
-    asyncio.run(check_stock())
+    print("Starting Gamersberg Stock Bot application...")
+    # Start the stock checking function in a separate thread
+    bot_thread = threading.Thread(target=run_bot_in_background)
+    bot_thread.daemon = True # Allow the main program to exit even if thread is running
+    bot_thread.start()
+
+    # Get the port from the environment variable (Render sets this)
+    port = int(os.environ.get("PORT", 8080))
+    print(f"Flask server starting on port {port}")
+    # Run the Flask app on the detected port
+    app.run(host="0.0.0.0", port=port)
