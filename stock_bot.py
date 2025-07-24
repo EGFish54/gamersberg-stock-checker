@@ -18,12 +18,12 @@ TARGET_SEEDS = [
 ]
 
 # Gmail Configuration (Set these as environment variables)
-GMAIL_SENDER_EMAIL = os.environ.get("GMAIL_SENDER_EMAIL")     # Your Gmail address (the sender)
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")     # Your Gmail App Password
+GMAIL_SENDER_EMAIL = os.environ.get("GMAIL_SENDER_EMAIL")       # Your Gmail address (the sender)
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")       # Your Gmail App Password
 GMAIL_RECIPIENT_EMAIL = os.environ.get("GMAIL_RECIPIENT_EMAIL") # The email address to send alerts to
 
 ENABLE_GMAIL_EMAIL = os.environ.get("ENABLE_GMAIL_EMAIL", "False").lower() == "true"
-CHECK_INTERVAL_SECONDS = int(os.environ.get("CHECK_INTERVAL_SECONDS", "120")) # Default to 2 minutes
+# CHECK_INTERVAL_SECONDS is no longer needed as the Render Cron Job handles the scheduling.
 
 def send_email_notification(subject, body):
     """Sends an email notification using Gmail SMTP."""
@@ -61,12 +61,14 @@ async def check_stock():
     async with async_playwright() as p:
         browser = None
         try:
-            browser = await p.chromium.launch(headless=True) # Run in headless mode for deployment
+            # Run in headless mode for deployment
+            browser = await p.chromium.launch(headless=True) 
             page = await browser.new_page()
             await page.goto(WEBSITE_URL, wait_until="domcontentloaded")
 
             # Wait for the seed items to be present
-            await page.wait_for_selector(".seed-item", timeout=15000) # Increased timeout for initial load
+            # Increased timeout for initial load
+            await page.wait_for_selector(".seed-item", timeout=15000) 
 
             seed_items = await page.locator(".seed-item").all()
             found_available_seeds = False
@@ -108,13 +110,8 @@ async def check_stock():
                 await browser.close()
     print("Stock check completed.")
 
-async def main_loop():
-    """Runs the stock check indefinitely at a specified interval."""
-    while True:
-        await check_stock()
-        print(f"Waiting for {CHECK_INTERVAL_SECONDS} seconds before next check...")
-        await asyncio.sleep(CHECK_INTERVAL_SECONDS)
-
+# The script will now run check_stock() once and then exit.
+# Render's Cron Job will handle the repeated execution.
 if __name__ == "__main__":
     print("Starting bot...")
-    asyncio.run(main_loop())
+    asyncio.run(check_stock())
