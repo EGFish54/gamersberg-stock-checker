@@ -1,5 +1,5 @@
 # Use an official Python runtime as a parent image
-FROM python:3.9-slim-buster
+FROM python:3.9-slim-bookworm
 
 # Install system dependencies for Playwright browsers
 # Playwright requires certain libraries to run browsers in a headless environment.
