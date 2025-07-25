@@ -1,21 +1,20 @@
-# Use an official Python runtime as a parent image
-FROM python:3.9-slim-bookworm
-
-# Install system dependencies for Playwright browsers
-# Playwright requires certain libraries to run browsers in a headless environment.
-# The 'install-deps' command is part of the playwright package.
-RUN pip install playwright && playwright install --with-deps
+# Use an official Playwright Docker image with Python and browser dependencies
+FROM mcr.microsoft.com/playwright/python:v1.44.0-jammy
 
 # Set the working directory in the container
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
+# Copy the requirements file and install Python dependencies
+# Playwright itself and its browsers are already included in the base image.
 COPY requirements.txt .
-COPY stock_bot.py .
-
-# Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the application code
+COPY stock_bot.py .
+
+# Expose the port that Flask will run on (Render usually detects this, but good practice)
+EXPOSE 10000
+
 # Command to run the application
-# This will execute your Python script directly
+# This will start your Flask server, which then starts the bot in a separate thread.
 CMD ["python", "stock_bot.py"]

@@ -7,6 +7,7 @@ from playwright.async_api import async_playwright, TimeoutError
 import threading
 import time
 from flask import Flask, jsonify
+import traceback # <--- ADD THIS IMPORT
 
 # --- Configuration (using environment variables) ---
 WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://www.gamersberg.com/grow-a-garden/stock")
@@ -57,6 +58,7 @@ def send_email_notification(subject, body):
         print(f"Error sending email: {e}")
         print("Please ensure you've generated an App Password for your Gmail account if you have 2FA enabled.")
         print("You can generate one here: https://myaccount.google.com/apppasswords")
+        traceback.print_exc() # <--- ADDED: Print traceback for email errors
 
 
 async def check_stock_async():
@@ -67,13 +69,19 @@ async def check_stock_async():
     async with async_playwright() as p:
         browser = None
         try:
+            print("Attempting to launch Chromium browser...")
             browser = await p.chromium.launch(headless=True) # Run in headless mode for deployment
+            print("Chromium browser launched successfully.")
             page = await browser.new_page()
+            print(f"Navigating to {WEBSITE_URL}...")
             await page.goto(WEBSITE_URL, wait_until="domcontentloaded")
+            print("Page loaded. Waiting for selector '.seed-item'...")
 
             await page.wait_for_selector(".seed-item", timeout=15000) # Increased timeout for initial load
+            print("Selector '.seed-item' found. Extracting elements...")
 
             seed_items = await page.locator(".seed-item").all()
+            print(f"Found {len(seed_items)} seed items.") # <--- ADDED: Log how many items found
             
             newly_available_seeds = []
             
@@ -90,7 +98,7 @@ async def check_stock_async():
                 quantity = int(match.group(1)) if match else 0
 
                 if cleaned_seed_name in TARGET_SEEDS:
-                    print(f"Found {cleaned_seed_name}: Stock: {quantity}")
+                    print(f"Processing {cleaned_seed_name}: Stock: {quantity}") # <--- ADDED: More detailed logging
                     if quantity > 0 and cleaned_seed_name not in notified_seeds:
                         newly_available_seeds.append(f"{cleaned_seed_name}: {quantity} available!")
                         notified_seeds.add(cleaned_seed_name) # Add to set to prevent repeat notifications
@@ -104,12 +112,15 @@ async def check_stock_async():
                 print("No *newly* available target seeds found in stock.")
 
         except TimeoutError:
-            print(f"Error: Page elements did not load within the expected time for {WEBSITE_URL}")
+            print(f"Error: Page elements did not load within the expected time for {WEBSITE_URL}. This might indicate the page structure changed, network issues, or the website being slow to respond.")
+            traceback.print_exc() # <--- ADDED: Print traceback for TimeoutError
         except Exception as e:
             print(f"An unexpected error occurred during stock check: {e}")
+            traceback.print_exc() # <--- ADDED: Print full traceback for debugging
         finally:
             if browser:
                 await browser.close()
+                print("Chromium browser closed.")
     print("Stock check completed.")
 
 
