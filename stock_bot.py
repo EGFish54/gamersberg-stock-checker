@@ -9,86 +9,35 @@ import time
 from flask import Flask, jsonify
 import traceback 
 
-# --- Configuration (using environment variables) ---
-WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://www.gamersberg.com/grow-a-garden/stock")
-
-# The seeds you are looking for (case-insensitive search)
-TARGET_SEEDS = [
-    "Beanstalk",
-    "Burning Bud",
-    "Giant Pinecone",
-    "Sugar Apple",
-    "Ember Lily"
-]
-
-# Gmail Configuration (Set these as environment variables)
-GMAIL_SENDER_EMAIL = os.environ.get("GMAIL_SENDER_EMAIL")       # Your Gmail address (the sender)
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")       # Your Gmail App Password
-GMAIL_RECIPIENT_EMAIL = os.environ.get("GMAIL_RECIPIENT_EMAIL") # The email address to send alerts to
-
-ENABLE_GMAIL_EMAIL = os.environ.get("ENABLE_GMAIL_EMAIL", "False").lower() == "true"
-CHECK_INTERVAL_SECONDS = int(os.environ.get("CHECK_INTERVAL_SECONDS", "120")) # Default to 2 minutes
-
-# Global variable to keep track of notified seeds across checks
-notified_seeds = set()
-
-def send_email_notification(subject, body):
-    """Sends an email notification using Gmail SMTP."""
-    if not ENABLE_GMAIL_EMAIL:
-        print("Gmail email is disabled. Skipping email sending.")
-        return
-
-    if not GMAIL_SENDER_EMAIL or not GMAIL_APP_PASSWORD or not GMAIL_RECIPIENT_EMAIL:
-        print("Gmail credentials or recipient email not fully configured. Cannot send email.")
-        return
-
-    try:
-        msg = EmailMessage()
-        msg.set_content(body)
-        msg['Subject'] = subject
-        msg['From'] = GMAIL_SENDER_EMAIL
-        msg['To'] = GMAIL_RECIPIENT_EMAIL
-
-        print(f"Attempting to send email to {GMAIL_RECIPIENT_EMAIL}...")
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
-            smtp.login(GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD)
-            smtp.send_message(msg)
-        print("Email sent successfully!")
-    except Exception as e:
-        print(f"Error sending email: {e}")
-        print("Please ensure you've generated an App Password for your Gmail account if you have 2FA enabled.")
-        print("You can generate one here: https://myaccount.google.com/apppasswords")
-        traceback.print_exc()
-
+# ... (rest of your configuration and send_email_notification function) ...
 
 async def check_stock_async():
     """Asynchronously checks the website for target seed stock and sends alerts."""
     print(f"Starting stock check for {WEBSITE_URL}...")
     print(f"Target seeds: {', '.join(TARGET_SEEDS)}")
 
-    print("--- DEBUG: Before async_playwright context ---") # NEW DIAGNOSTIC PRINT
+    print("--- DEBUG: Before async_playwright context ---")
     async with async_playwright() as p:
-        print("--- DEBUG: Inside async_playwright context ---") # NEW DIAGNOSTIC PRINT
+        print("--- DEBUG: Inside async_playwright context ---")
         browser = None
         try:
             print("Attempting to launch Chromium browser...")
-            browser = await p.chromium.launch(headless=True, timeout=60000) 
+            # ADDED: dumpio=True to output browser process logs
+            browser = await p.chromium.launch(headless=True, timeout=60000, dumpio=True) 
             print("Chromium browser launched successfully.")
             page = await browser.new_page()
             print(f"Navigating to {WEBSITE_URL}...")
             await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=60000)
             print("Page loaded via goto. Waiting for selector '.seed-item'...")
 
-            # --- NEW: Try/except block specifically for the selector wait ---
             try:
                 await page.wait_for_selector(".seed-item", timeout=60000)
                 print("Selector '.seed-item' found. Extracting elements...")
             except TimeoutError:
                 print(f"Timeout: Selector '.seed-item' not found within 60 seconds. Attempting to get page content for inspection...")
-                # Get the page content if selector times out
                 page_content = await page.content()
                 print("--- Start of Page Content (first 2000 chars) ---")
-                print(page_content[:2000]) # Print first 2000 characters to avoid huge logs
+                print(page_content[:2000])
                 print("--- End of Page Content ---")
                 raise # Re-raise the TimeoutError so it's still caught by the outer except block
 
@@ -136,37 +85,4 @@ async def check_stock_async():
                 print("Chromium browser closed.")
     print("Stock check completed.")
 
-
-def run_bot_in_background():
-    """Runs the stock check indefinitely in an asyncio event loop."""
-    print("Starting background stock checker loop...")
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    
-    while True:
-        loop.run_until_complete(check_stock_async())
-        print(f"Waiting for {CHECK_INTERVAL_SECONDS} seconds before next check...")
-        time.sleep(CHECK_INTERVAL_SECONDS) 
-
-# --- Flask Web Server ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    """A simple endpoint for Render to ping."""
-    return jsonify({"status": "ok", "message": "Gamersberg Stock Bot is running!"})
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint."""
-    return jsonify({"status": "healthy"})
-
-if __name__ == "__main__":
-    print("Starting Gamersberg Stock Bot application...")
-    bot_thread = threading.Thread(target=run_bot_in_background)
-    bot_thread.daemon = True 
-    bot_thread.start()
-
-    port = int(os.environ.get("PORT", 8080))
-    print(f"Flask server starting on port {port}")
-    app.run(host="0.0.0.0", port=port)
+# ... (rest of your run_bot_in_background and Flask app code) ...
