@@ -78,18 +78,26 @@ async def check_stock_async():
         browser = None
         try:
             logger.info("Attempting to launch Chromium browser...")
-            browser = await p.chromium.launch(headless=True, timeout=60000)
+            browser = await p.chromium.launch(headless=True, timeout=90000) # Increased timeout
             logger.info("Chromium browser launched successfully.")
+            
             page = await browser.new_page()
-            logger.info(f"Navigating to {WEBSITE_URL}...")
-            await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=60000)
-            logger.info("Page loaded via goto. Waiting for selector '.seed-item'...")
+            
+            logger.info(f"Navigating to {WEBSITE_URL} with 90s timeout...")
+            await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=90000) # Increased timeout
+            
+            logger.info("Page loaded via goto. Taking screenshot for debugging...")
+            # Take a screenshot for debugging. Render services have write access to /tmp.
+            screenshot_path = "/tmp/page_initial.png" 
+            await page.screenshot(path=screenshot_path)
+            logger.info(f"Screenshot saved to {screenshot_path}")
 
+            logger.info("Waiting for selector '.seed-item' with 90s timeout...")
             try:
-                await page.wait_for_selector(".seed-item", timeout=60000)
+                await page.wait_for_selector(".seed-item", timeout=90000) # Increased timeout
                 logger.info("Selector '.seed-item' found. Extracting elements...")
             except TimeoutError:
-                logger.warning(f"Timeout: Selector '.seed-item' not found within 60 seconds. Attempting to get page content for inspection...")
+                logger.warning(f"Timeout: Selector '.seed-item' not found within 90 seconds. Attempting to get page content for inspection...")
                 page_content = await page.content()
                 logger.info("--- Start of Page Content (first 2000 chars) ---")
                 logger.info(page_content[:2000])
@@ -141,7 +149,7 @@ async def check_stock_async():
 
 def run_bot_in_background():
     """Runs the stock check indefinitely in an asyncio event loop."""
-    logger.info("Starting background stock checker loop...") # Use logger here too
+    logger.info("Starting background stock checker loop...")
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
@@ -164,7 +172,7 @@ def run_bot_in_background():
 #     return jsonify({"status": "healthy"})
 
 if __name__ == "__main__":
-    logger.info("--- DEBUG: Main execution block started! ---") # New diagnostic print
+    logger.info("--- DEBUG: Main execution block started! ---")
     try:
         # We will directly run the bot in the main thread for now, without Flask
         # This simplifies the execution environment significantly for debugging.
