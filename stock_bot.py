@@ -6,10 +6,15 @@ from email.message import EmailMessage
 from playwright.async_api import async_playwright, TimeoutError
 import threading
 import time
-from flask import Flask, jsonify
-import traceback 
+# Flask imports are removed for now for debugging
+import traceback
+import logging # Import logging module
 
-print("--- DEBUG: Script execution started! ---") # Keep this for early diagnostic
+# Configure logging to output to stdout
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+logger.info("--- DEBUG: Script execution started! ---") # Use logger instead of print
 
 # --- Configuration (using environment variables) ---
 WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://www.gamersberg.com/grow-a-garden/stock")
@@ -24,12 +29,12 @@ TARGET_SEEDS = [
 ]
 
 # Gmail Configuration (Set these as environment variables)
-GMAIL_SENDER_EMAIL = os.environ.get("GMAIL_SENDER_EMAIL")       # Your Gmail address (the sender)
-GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")       # Your Gmail App Password
-GMAIL_RECIPIENT_EMAIL = os.environ.get("GMAIL_RECIPIENT_EMAIL") # The email address to send alerts to
+GMAIL_SENDER_EMAIL = os.environ.get("GMAIL_SENDER_EMAIL")
+GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
+GMAIL_RECIPIENT_EMAIL = os.environ.get("GMAIL_RECIPIENT_EMAIL")
 
 ENABLE_GMAIL_EMAIL = os.environ.get("ENABLE_GMAIL_EMAIL", "False").lower() == "true"
-CHECK_INTERVAL_SECONDS = int(os.environ.get("CHECK_INTERVAL_SECONDS", "120")) # Default to 2 minutes
+CHECK_INTERVAL_SECONDS = int(os.environ.get("CHECK_INTERVAL_SECONDS", "120"))
 
 # Global variable to keep track of notified seeds across checks
 notified_seeds = set()
@@ -37,11 +42,11 @@ notified_seeds = set()
 def send_email_notification(subject, body):
     """Sends an email notification using Gmail SMTP."""
     if not ENABLE_GMAIL_EMAIL:
-        print("Gmail email is disabled. Skipping email sending.")
+        logger.info("Gmail email is disabled. Skipping email sending.")
         return
 
     if not GMAIL_SENDER_EMAIL or not GMAIL_APP_PASSWORD or not GMAIL_RECIPIENT_EMAIL:
-        print("Gmail credentials or recipient email not fully configured. Cannot send email.")
+        logger.warning("Gmail credentials or recipient email not fully configured. Cannot send email.")
         return
 
     try:
@@ -51,50 +56,48 @@ def send_email_notification(subject, body):
         msg['From'] = GMAIL_SENDER_EMAIL
         msg['To'] = GMAIL_RECIPIENT_EMAIL
 
-        print(f"Attempting to send email to {GMAIL_RECIPIENT_EMAIL}...")
+        logger.info(f"Attempting to send email to {GMAIL_RECIPIENT_EMAIL}...")
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
             smtp.login(GMAIL_SENDER_EMAIL, GMAIL_APP_PASSWORD)
             smtp.send_message(msg)
-        print("Email sent successfully!")
+        logger.info("Email sent successfully!")
     except Exception as e:
-        print(f"Error sending email: {e}")
-        print("Please ensure you've generated an App Password for your Gmail account if you have 2FA enabled.")
-        print("You can generate one here: https://myaccount.google.com/apppasswords")
-        traceback.print_exc()
+        logger.error(f"Error sending email: {e}", exc_info=True) # exc_info=True prints traceback
+        logger.error("Please ensure you've generated an App Password for your Gmail account if you have 2FA enabled.")
+        logger.error("You can generate one here: https://myaccount.google.com/apppasswords")
 
 
 async def check_stock_async():
     """Asynchronously checks the website for target seed stock and sends alerts."""
-    print(f"Starting stock check for {WEBSITE_URL}...")
-    print(f"Target seeds: {', '.join(TARGET_SEEDS)}")
+    logger.info(f"Starting stock check for {WEBSITE_URL}...")
+    logger.info(f"Target seeds: {', '.join(TARGET_SEEDS)}")
 
-    print("--- DEBUG: Before async_playwright context ---")
+    logger.info("--- DEBUG: Before async_playwright context ---")
     async with async_playwright() as p:
-        print("--- DEBUG: Inside async_playwright context ---")
+        logger.info("--- DEBUG: Inside async_playwright context ---")
         browser = None
         try:
-            print("Attempting to launch Chromium browser...")
-            # ADDED: dumpio=True to output browser process logs
-            browser = await p.chromium.launch(headless=True, timeout=60000) 
-            print("Chromium browser launched successfully.")
+            logger.info("Attempting to launch Chromium browser...")
+            browser = await p.chromium.launch(headless=True, timeout=60000)
+            logger.info("Chromium browser launched successfully.")
             page = await browser.new_page()
-            print(f"Navigating to {WEBSITE_URL}...")
+            logger.info(f"Navigating to {WEBSITE_URL}...")
             await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=60000)
-            print("Page loaded via goto. Waiting for selector '.seed-item'...")
+            logger.info("Page loaded via goto. Waiting for selector '.seed-item'...")
 
             try:
                 await page.wait_for_selector(".seed-item", timeout=60000)
-                print("Selector '.seed-item' found. Extracting elements...")
+                logger.info("Selector '.seed-item' found. Extracting elements...")
             except TimeoutError:
-                print(f"Timeout: Selector '.seed-item' not found within 60 seconds. Attempting to get page content for inspection...")
+                logger.warning(f"Timeout: Selector '.seed-item' not found within 60 seconds. Attempting to get page content for inspection...")
                 page_content = await page.content()
-                print("--- Start of Page Content (first 2000 chars) ---")
-                print(page_content[:2000])
-                print("--- End of Page Content ---")
-                raise # Re-raise the TimeoutError so it's still caught by the outer except block
+                logger.info("--- Start of Page Content (first 2000 chars) ---")
+                logger.info(page_content[:2000])
+                logger.info("--- End of Page Content ---")
+                raise # Re-raise the TimeoutError
 
             seed_items = await page.locator(".seed-item").all()
-            print(f"Found {len(seed_items)} seed items.")
+            logger.info(f"Found {len(seed_items)} seed items.")
             
             newly_available_seeds = []
             
@@ -111,63 +114,60 @@ async def check_stock_async():
                 quantity = int(match.group(1)) if match else 0
 
                 if cleaned_seed_name in TARGET_SEEDS:
-                    print(f"Processing {cleaned_seed_name}: Stock: {quantity}")
+                    logger.info(f"Processing {cleaned_seed_name}: Stock: {quantity}")
                     if quantity > 0 and cleaned_seed_name not in notified_seeds:
                         newly_available_seeds.append(f"{cleaned_seed_name}: {quantity} available!")
-                        notified_seeds.add(cleaned_seed_name) 
+                        notified_seeds.add(cleaned_seed_name)
 
             if newly_available_seeds:
                 alert_email_subject = "Gamersberg Stock Alert! NEWLY AVAILABLE!"
                 alert_email_body = "The following target seeds are now available:\n\n" + "\n".join(newly_available_seeds)
-                print("Sending availability alert via email...")
+                logger.info("Sending availability alert via email...")
                 send_email_notification(alert_email_subject, alert_email_body.strip())
             else:
-                print("No *newly* available target seeds found in stock.")
+                logger.info("No *newly* available target seeds found in stock.")
 
         except TimeoutError as te:
-            print(f"Final Timeout Error during stock check: {te}")
-            print(f"Error: Page elements did not load within the expected time for {WEBSITE_URL}. This might indicate the page structure changed, network issues, or the website being slow to respond.")
-            traceback.print_exc()
+            logger.error(f"Final Timeout Error during stock check: {te}", exc_info=True)
+            logger.error(f"Error: Page elements did not load within the expected time for {WEBSITE_URL}. This might indicate the page structure changed, network issues, or the website being slow to respond.")
         except Exception as e:
-            print(f"An unexpected error occurred during stock check: {e}")
-            traceback.print_exc()
+            logger.error(f"An unexpected error occurred during stock check: {e}", exc_info=True)
         finally:
             if browser:
                 await browser.close()
-                print("Chromium browser closed.")
-    print("Stock check completed.")
+                logger.info("Chromium browser closed.")
+    logger.info("Stock check completed.")
 
 
 def run_bot_in_background():
     """Runs the stock check indefinitely in an asyncio event loop."""
-    print("Starting background stock checker loop...")
+    logger.info("Starting background stock checker loop...") # Use logger here too
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     
     while True:
-        loop.run_until_complete(check_stock_async())
-        print(f"Waiting for {CHECK_INTERVAL_SECONDS} seconds before next check...")
-        time.sleep(CHECK_INTERVAL_SECONDS) 
+        try: # Add a try/except around the async call as well
+            loop.run_until_complete(check_stock_async())
+        except Exception as e:
+            logger.error(f"Error in background stock checker loop: {e}", exc_info=True)
+            # Potentially add a short sleep here to prevent rapid error looping
+        logger.info(f"Waiting for {CHECK_INTERVAL_SECONDS} seconds before next check...")
+        time.sleep(CHECK_INTERVAL_SECONDS)
 
-# --- Flask Web Server ---
-app = Flask(__name__)
-
-@app.route('/')
-def home():
-    """A simple endpoint for Render to ping."""
-    return jsonify({"status": "ok", "message": "Gamersberg Stock Bot is running!"})
-
-@app.route('/health')
-def health_check():
-    """Health check endpoint."""
-    return jsonify({"status": "healthy"})
+# --- TEMPORARILY REMOVED FLASK FOR DEBUGGING ---
+# app = Flask(__name__)
+# @app.route('/')
+# def home():
+#     return jsonify({"status": "ok", "message": "Gamersberg Stock Bot is running!"})
+# @app.route('/health')
+# def health_check():
+#     return jsonify({"status": "healthy"})
 
 if __name__ == "__main__":
-    print("Starting Gamersberg Stock Bot application...")
-    bot_thread = threading.Thread(target=run_bot_in_background)
-    bot_thread.daemon = True 
-    bot_thread.start()
-
-    port = int(os.environ.get("PORT", 8080))
-    print(f"Flask server starting on port {port}")
-    app.run(host="0.0.0.0", port=port)
+    logger.info("--- DEBUG: Main execution block started! ---") # New diagnostic print
+    try:
+        # We will directly run the bot in the main thread for now, without Flask
+        # This simplifies the execution environment significantly for debugging.
+        run_bot_in_background()
+    except Exception as e:
+        logger.error(f"--- DEBUG: Critical error in main execution block: {e}", exc_info=True)
