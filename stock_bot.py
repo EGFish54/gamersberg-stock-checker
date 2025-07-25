@@ -66,22 +66,31 @@ async def check_stock_async():
     print(f"Starting stock check for {WEBSITE_URL}...")
     print(f"Target seeds: {', '.join(TARGET_SEEDS)}")
 
+    print("--- DEBUG: Before async_playwright context ---") # NEW DIAGNOSTIC PRINT
     async with async_playwright() as p:
+        print("--- DEBUG: Inside async_playwright context ---") # NEW DIAGNOSTIC PRINT
         browser = None
         try:
             print("Attempting to launch Chromium browser...")
-            # Increased timeout for launch itself to be safe, though not directly the issue here
-            browser = await p.chromium.launch(headless=True, timeout=60000) # Increased timeout to 60s
+            browser = await p.chromium.launch(headless=True, timeout=60000) 
             print("Chromium browser launched successfully.")
             page = await browser.new_page()
             print(f"Navigating to {WEBSITE_URL}...")
-            # Change wait_until to 'networkidle' and increase timeout for page load
-            await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=60000) # Increased timeout to 60s
-            print("Page loaded. Waiting for selector '.seed-item'...")
+            await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=60000)
+            print("Page loaded via goto. Waiting for selector '.seed-item'...")
 
-            # Increase timeout for selector to 60 seconds
-            await page.wait_for_selector(".seed-item", timeout=60000) # Increased timeout to 60 seconds
-            print("Selector '.seed-item' found. Extracting elements...")
+            # --- NEW: Try/except block specifically for the selector wait ---
+            try:
+                await page.wait_for_selector(".seed-item", timeout=60000)
+                print("Selector '.seed-item' found. Extracting elements...")
+            except TimeoutError:
+                print(f"Timeout: Selector '.seed-item' not found within 60 seconds. Attempting to get page content for inspection...")
+                # Get the page content if selector times out
+                page_content = await page.content()
+                print("--- Start of Page Content (first 2000 chars) ---")
+                print(page_content[:2000]) # Print first 2000 characters to avoid huge logs
+                print("--- End of Page Content ---")
+                raise # Re-raise the TimeoutError so it's still caught by the outer except block
 
             seed_items = await page.locator(".seed-item").all()
             print(f"Found {len(seed_items)} seed items.")
@@ -104,7 +113,7 @@ async def check_stock_async():
                     print(f"Processing {cleaned_seed_name}: Stock: {quantity}")
                     if quantity > 0 and cleaned_seed_name not in notified_seeds:
                         newly_available_seeds.append(f"{cleaned_seed_name}: {quantity} available!")
-                        notified_seeds.add(cleaned_seed_name) # Add to set to prevent repeat notifications
+                        notified_seeds.add(cleaned_seed_name) 
 
             if newly_available_seeds:
                 alert_email_subject = "Gamersberg Stock Alert! NEWLY AVAILABLE!"
@@ -115,7 +124,7 @@ async def check_stock_async():
                 print("No *newly* available target seeds found in stock.")
 
         except TimeoutError as te:
-            print(f"Timeout Error during stock check: {te}")
+            print(f"Final Timeout Error during stock check: {te}")
             print(f"Error: Page elements did not load within the expected time for {WEBSITE_URL}. This might indicate the page structure changed, network issues, or the website being slow to respond.")
             traceback.print_exc()
         except Exception as e:
@@ -137,7 +146,7 @@ def run_bot_in_background():
     while True:
         loop.run_until_complete(check_stock_async())
         print(f"Waiting for {CHECK_INTERVAL_SECONDS} seconds before next check...")
-        time.sleep(CHECK_INTERVAL_SECONDS) # Use time.sleep as it's not blocking the Flask server
+        time.sleep(CHECK_INTERVAL_SECONDS) 
 
 # --- Flask Web Server ---
 app = Flask(__name__)
@@ -154,13 +163,10 @@ def health_check():
 
 if __name__ == "__main__":
     print("Starting Gamersberg Stock Bot application...")
-    # Start the stock checking function in a separate thread
     bot_thread = threading.Thread(target=run_bot_in_background)
-    bot_thread.daemon = True # Allow the main program to exit even if thread is running
+    bot_thread.daemon = True 
     bot_thread.start()
 
-    # Get the port from the environment variable (Render sets this)
     port = int(os.environ.get("PORT", 8080))
     print(f"Flask server starting on port {port}")
-    # Run the Flask app on the detected port
     app.run(host="0.0.0.0", port=port)
