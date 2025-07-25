@@ -75,7 +75,7 @@ async def check_stock_async():
         try:
             print("Attempting to launch Chromium browser...")
             # ADDED: dumpio=True to output browser process logs
-            browser = await p.chromium.launch(headless=True, timeout=60000, dumpio=True) 
+            browser = await p.chromium.launch(headless=True, timeout=60000) 
             print("Chromium browser launched successfully.")
             page = await browser.new_page()
             print(f"Navigating to {WEBSITE_URL}...")
