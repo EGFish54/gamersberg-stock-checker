@@ -1,20 +1,22 @@
-# Use an official Playwright Docker image with Python and browser dependencies
-FROM mcr.microsoft.com/playwright/python:v1.54.0-jammy
+FROM python:3.11-slim
 
-# Set the working directory in the container
 WORKDIR /app
 
-# Copy the requirements file and install Python dependencies
-# Playwright itself and its browsers are already included in the base image.
+# Install OS packages needed by Playwright
+RUN apt-get update && apt-get install -y \
+    wget gnupg unzip fonts-liberation libnss3 libatk-bridge2.0-0 libgtk-3-0 \
+    libxss1 libasound2 libxshmfence1 libgbm1 libxrandr2 libxdamage1 libxcomposite1 libxext6 libxfixes3 libxi6 libxtst6 \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --upgrade pip && pip install -r requirements.txt
 
-# Copy the application code
-COPY stock_bot.py .
+# Install Playwright browsers
+RUN playwright install --with-deps chromium
 
-# Expose the port that Flask will run on (Render usually detects this, but good practice)
+# Copy bot code
+COPY . .
+
 EXPOSE 10000
-
-# Command to run the application
-# This will start your Flask server, which then starts the bot in a separate thread.
 CMD ["python", "stock_bot.py"]
