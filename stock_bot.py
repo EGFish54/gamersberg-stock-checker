@@ -1,3 +1,4 @@
+
 import os
 import asyncio
 import re
@@ -15,8 +16,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # --- Configuration ---
+RAW_TARGET_SEEDS = ["Beanstalk", "Burning Bud", "Giant Pinecone", "Sugar Apple", "Tomato", "Elder Strawberry", "Ember Lily"]
+TARGET_SEEDS = [s.lower() for s in RAW_TARGET_SEEDS]
 WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://www.gamersberg.com/grow-a-garden/stock")
-TARGET_SEEDS = ["Beanstalk", "Burning Bud", "Giant Pinecone", "Sugar Apple", "Tomato", "Elder Strawberry","Ember Lily"]
 GMAIL_SENDER_EMAIL = os.environ.get("GMAIL_SENDER_EMAIL")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 GMAIL_RECIPIENT_EMAIL = os.environ.get("GMAIL_RECIPIENT_EMAIL")
@@ -53,7 +55,7 @@ async def check_stock_async():
             browser = await p.chromium.launch(headless=True, timeout=90000)
             page = await browser.new_page()
             await page.goto(WEBSITE_URL, wait_until="domcontentloaded", timeout=90000)
-            await page.wait_for_timeout(3000)  # Wait 3 seconds
+            await page.wait_for_timeout(3000)
             await page.wait_for_selector("div.bg-gradient-to-br.rounded-lg.border-blue-400\/30.backdrop-blur-md", timeout=90000)
             seed_items = await page.locator("div.bg-gradient-to-br.rounded-lg.border-blue-400\/30.backdrop-blur-md").all()
             logger.info(f"Found {len(seed_items)} seed items on page.")
@@ -71,7 +73,9 @@ async def check_stock_async():
                 match = re.search(r'Stock:\s*(\d+)', stock_text)
                 quantity = int(match.group(1)) if match else 0
 
-                if cleaned_seed_name in TARGET_SEEDS:
+                logger.info(f"Raw: {seed_name} | Cleaned: {cleaned_seed_name} | Stock: {quantity}")
+
+                if cleaned_seed_name.lower() in TARGET_SEEDS:
                     logger.info(f"{cleaned_seed_name}: {quantity} in stock")
                     if quantity > 0 and cleaned_seed_name not in notified_seeds:
                         newly_available_seeds.append(f"{cleaned_seed_name}: {quantity} available!")
