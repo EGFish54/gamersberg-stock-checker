@@ -60,10 +60,10 @@ async def check_stock_async():
             browser = await p.chromium.launch(headless=True, timeout=90000)
             page = await browser.new_page()
             
-            # Using 'domcontentloaded' as per your last script, then wait a few seconds for JS to render
-            logger.info(f"Navigating to {WEBSITE_URL}, waiting for DOM content to load, then a 3s pause...")
+            # Increased page.goto timeout to 90s (same as browser launch) and added a 45s hard wait
+            logger.info(f"Navigating to {WEBSITE_URL}, waiting for DOM content to load, then a 45s pause for full rendering...")
             await page.goto(WEBSITE_URL, wait_until="domcontentloaded", timeout=90000)
-            await page.wait_for_timeout(3000)  # Wait 3 seconds for JavaScript to execute and render elements
+            await page.wait_for_timeout(45000)  # Increased wait to 45 seconds for full page rendering
             
             logger.info("Waiting for main seed item containers...")
             # Using your new, more specific selector for the main containers
@@ -80,15 +80,13 @@ async def check_stock_async():
                 logger.info(f"Processing item {i+1}/{len(seed_items)}...")
                 
                 try:
-                    # Explicitly wait for h2 and p elements to be visible within THIS item
+                    # Explicitly wait for h2 and p elements to be visible within THIS item (still 30s as a fallback)
                     seed_name_element = item_element.locator("h2")
-                    # Increased timeout for nested elements to 30 seconds
                     await seed_name_element.wait_for(state="visible", timeout=30000) 
                     seed_name = await seed_name_element.text_content()
                     logger.info(f"Extracted name for item {i+1}: {seed_name}")
                     
                     stock_element = item_element.locator("p.text-green-500, p.text-red-500")
-                    # Increased timeout for nested elements to 30 seconds
                     await stock_element.wait_for(state="visible", timeout=30000) 
                     stock_text = await stock_element.text_content()
                     logger.info(f"Extracted stock text for item {i+1}: {stock_text}")
@@ -103,11 +101,8 @@ async def check_stock_async():
                             newly_available_seeds.append(f"{cleaned_seed_name}: {quantity} available!")
                             notified_seeds.add(cleaned_seed_name)
                 except TimeoutError as e:
-                    # Log which specific item caused the timeout
                     logger.warning(f"Timeout while processing elements for item {i+1}. Skipping this item. Error: {e}")
-                    # Optionally, get innerHTML of item_element here for more context
-                    # logger.info(f"Content of problematic item {i+1}: {await item_element.inner_html()}")
-                    continue # Move to the next item if this one times out
+                    continue
                 except Exception as e:
                     logger.error(f"Error extracting data for item {i+1}: {e}", exc_info=True)
                     continue
