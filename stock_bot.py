@@ -82,12 +82,14 @@ async def check_stock_async():
                 try:
                     # Explicitly wait for h2 and p elements to be visible within THIS item
                     seed_name_element = item_element.locator("h2")
-                    await seed_name_element.wait_for(state="visible", timeout=10000) # Wait 10s for h2 inside item
+                    # Increased timeout for nested elements to 30 seconds
+                    await seed_name_element.wait_for(state="visible", timeout=30000) 
                     seed_name = await seed_name_element.text_content()
                     logger.info(f"Extracted name for item {i+1}: {seed_name}")
                     
                     stock_element = item_element.locator("p.text-green-500, p.text-red-500")
-                    await stock_element.wait_for(state="visible", timeout=10000) # Wait 10s for stock p inside item
+                    # Increased timeout for nested elements to 30 seconds
+                    await stock_element.wait_for(state="visible", timeout=30000) 
                     stock_text = await stock_element.text_content()
                     logger.info(f"Extracted stock text for item {i+1}: {stock_text}")
 
