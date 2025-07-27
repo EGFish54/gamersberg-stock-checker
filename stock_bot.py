@@ -53,4 +53,5 @@ async def check_stock_async():
             page = await browser.new_page()
             await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=90000)
             await page.wait_for_selector(".seed-item", timeout=90000)
-            seed_items = await page.locator(".see_
+            seed_items = await page.locator(".seed-item").all()
+
