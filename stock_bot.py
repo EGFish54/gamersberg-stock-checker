@@ -52,7 +52,8 @@ async def check_stock_async():
             logger.info(f"Checking stock at {WEBSITE_URL}...")
             browser = await p.chromium.launch(headless=True, timeout=90000)
             page = await browser.new_page()
-            await page.goto(WEBSITE_URL, wait_until="networkidle", timeout=90000)
+            await page.goto(WEBSITE_URL, wait_until="domcontentloaded", timeout=90000)
+            await page.wait_for_timeout(3000)  # Wait 3 seconds
             await page.wait_for_selector("div.bg-gradient-to-br.rounded-lg.border-blue-400\\/30.backdrop-blur-md", timeout=90000)
             seed_items = await page.locator("div.bg-gradient-to-br.rounded-lg.border-blue-400\\/30.backdrop-blur-md").all()
             logger.info(f"Found {len(seed_items)} seed items on page.")
