@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 # --- Configuration ---
 WEBSITE_URL = os.environ.get("WEBSITE_URL", "https://www.gamersberg.com/grow-a-garden/stock")
-TARGET_SEEDS = ["Beanstalk", "Burning Bud", "Giant Pinecone", "Sugar Apple", "Ember Lily"]
+TARGET_SEEDS = ["Beanstalk", "Burning Bud", "Giant Pinecone", "Sugar Apple", "Tomato", "Elder Strawberry","Ember Lily"]
 GMAIL_SENDER_EMAIL = os.environ.get("GMAIL_SENDER_EMAIL")
 GMAIL_APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD")
 GMAIL_RECIPIENT_EMAIL = os.environ.get("GMAIL_RECIPIENT_EMAIL")
