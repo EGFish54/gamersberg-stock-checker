@@ -57,7 +57,18 @@ async def check_stock_async():
         try:
             logger.info(f"Checking stock at {WEBSITE_URL}...")
             # Using 90s timeout for browser launch
-            browser = await p.chromium.launch(headless=True, timeout=90000)
+            browser = await p.chromium.launch(
+                headless=True,
+                timeout=90000,
+                args=[
+                    '--no-sandbox',
+                    '--disable-setuid-sandbox',
+                    '--disable-dev-shm-usage',
+                    '--disable-accelerated-video-decode',
+                    '--disable-gpu',
+                    '--single-process'
+                ]
+            )
             page = await browser.new_page()
             
             # Increased page.goto timeout to 90s (same as browser launch) and added a 45s hard wait
