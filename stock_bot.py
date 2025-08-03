@@ -70,18 +70,18 @@ async def check_stock_async():
                 ]
             )
             page = await browser.new_page()
-            
+
             # Increased page.goto timeout to 90s (same as browser launch) and added a 45s hard wait
             logger.info(f"Navigating to {WEBSITE_URL}, waiting for DOM content to load, then a 45s pause for full rendering...")
             await page.goto(WEBSITE_URL, wait_until="domcontentloaded", timeout=90000)
             await page.wait_for_timeout(45000)  # Increased wait to 45 seconds for full page rendering
-            
+
             logger.info("Waiting for main seed item containers...")
             # Using your new, more specific selector for the main containers
             seed_item_container_selector = "div.bg-gradient-to-br.rounded-lg.border-blue-400\/30.backdrop-blur-md"
             await page.wait_for_selector(seed_item_container_selector, timeout=90000)
             logger.info(f"Main seed item containers found. Retrieving all items with selector: {seed_item_container_selector}")
-            
+
             seed_items = await page.locator(seed_item_container_selector).all()
             logger.info(f"Found {len(seed_items)} seed items on page.")
 
@@ -91,14 +91,14 @@ async def check_stock_async():
                 logger.info(f"Processing item {i+1}/{len(seed_items)}...")
                 # NEW: Add a small pause for elements within each item to settle
                 await page.wait_for_timeout(5000) # Wait 5 seconds for sub-elements to fully render/become stable
-                
+
                 try:
                     # Explicitly wait for h2 and p elements to be visible within THIS item
                     seed_name_element = item_element.locator("h2")
                     await seed_name_element.wait_for(state="visible", timeout=60000) # Increased to 60 seconds
                     seed_name = await seed_name_element.text_content()
                     logger.info(f"Extracted name for item {i+1}: {seed_name}")
-                    
+
                     stock_element = item_element.locator("p.text-green-500, p.text-red-500")
                     await stock_element.wait_for(state="visible", timeout=60000) # Increased to 60 seconds
                     stock_text = await stock_element.text_content()
@@ -162,11 +162,11 @@ def health():
     return jsonify({"status": "healthy"})
 
 if __name__ == "__main__":
-    logger.info("--- DEBUG: Main execution block started! ---")
+    logger.info("--- DEBUG: Main execution block started! ---\n") # Added newline for clarity in logs
     try:
         # Start the stock checker in a separate thread so Flask can run in the main thread
         threading.Thread(target=run_stock_checker_loop, daemon=True).start()
-        
+
         # Start the Flask web server
         port = int(os.environ.get("PORT", 10000)) # Use environment PORT or default to 10000
         logger.info(f"Flask server starting on port {port}")
