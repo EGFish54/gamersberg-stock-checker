@@ -89,16 +89,18 @@ async def check_stock_async():
 
             for i, item_element in enumerate(seed_items):
                 logger.info(f"Processing item {i+1}/{len(seed_items)}...")
+                # NEW: Add a small pause for elements within each item to settle
+                await page.wait_for_timeout(5000) # Wait 5 seconds for sub-elements to fully render/become stable
                 
                 try:
-                    # Explicitly wait for h2 and p elements to be visible within THIS item (still 30s as a fallback)
+                    # Explicitly wait for h2 and p elements to be visible within THIS item
                     seed_name_element = item_element.locator("h2")
-                    await seed_name_element.wait_for(state="visible", timeout=30000) 
+                    await seed_name_element.wait_for(state="visible", timeout=60000) # Increased to 60 seconds
                     seed_name = await seed_name_element.text_content()
                     logger.info(f"Extracted name for item {i+1}: {seed_name}")
                     
                     stock_element = item_element.locator("p.text-green-500, p.text-red-500")
-                    await stock_element.wait_for(state="visible", timeout=30000) 
+                    await stock_element.wait_for(state="visible", timeout=60000) # Increased to 60 seconds
                     stock_text = await stock_element.text_content()
                     logger.info(f"Extracted stock text for item {i+1}: {stock_text}")
 
